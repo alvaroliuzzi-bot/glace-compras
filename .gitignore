@@ -9,3 +9,4 @@ glace_log.txt
 *.jpg
 *.zip
 __pycache__/
+!docs/img/*.jpg
