@@ -1,0 +1,11 @@
+# datos reales de Glacé: no van al repositorio
+Biblioteca/
+*.xlsx
+*.xml
+*.csv
+glace_log.txt
+.acceso_ok
+*.jpeg
+*.jpg
+*.zip
+__pycache__/
