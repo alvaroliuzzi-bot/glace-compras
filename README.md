@@ -10,6 +10,9 @@
 
 <img src="docs/img/flujo.jpg" width="85%" alt="Tres fuentes de compras llegan a e-Karú como un solo archivo">
 
+
+<a href="https://claude.ai/artifact/6RK7nyF9HsXZztpKUsCuZy"><img src="https://img.shields.io/badge/🗂️_VER_TODOS_LOS_PROYECTOS-en_un_solo_lugar-6D5BD0?style=for-the-badge&labelColor=E0457B" height="40" alt="Ver todos los proyectos en un solo lugar"></a>
+
 </div>
 
 <img src=".github/assets/cards.svg" width="100%" alt="Tres pasos: cargar el Excel, buscar XML, exportar">
