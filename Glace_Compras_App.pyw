@@ -1320,7 +1320,7 @@ class Main(QMainWindow):
 
 
 def main():
-    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-compositing")
+    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-compositing --enable-smooth-scrolling")   # rueda del mouse suave
     app = QApplication(sys.argv)
     app.setApplicationName("Glacé Compras")
     lock = QLockFile(os.path.join(tempfile.gettempdir(), "glace_compras.lock"))
