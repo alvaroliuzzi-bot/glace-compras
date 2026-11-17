@@ -76,8 +76,20 @@ BTN_SKIP = ("QPushButton{background:#3a2a33;color:#e8dde3;border:0;padding:3px 1
             "QPushButton:hover{background:#55404c}")
 
 
+DESK_OK = os.path.join(HERE, ".escritorio_ok")
+
+
 def refresh_desktop():
-    """Avisa a Windows que el escritorio cambió (como pulsar F5): quita iconos viejos."""
+    """Avisa a Windows que el escritorio cambió (como pulsar F5): quita iconos viejos.
+    Hace falta una sola vez (después de crear el acceso directo) y corre aparte: Windows recarga los
+    íconos de todo el sistema y, si el programa lo esperara, la ventana se trababa al arrancar."""
+    if os.path.exists(DESK_OK):
+        return
+    threading.Thread(target=_refresh_desktop, daemon=True, name="escritorio").start()
+
+
+def _refresh_desktop():
+    t0 = time.time()
     try:
         import ctypes
         sh = ctypes.windll.shell32
@@ -92,7 +104,9 @@ def refresh_desktop():
                 buf = ctypes.create_unicode_buffer(d)
                 sh.SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW | SHCNF_FLUSH, buf, None)
         sh.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_FLUSH, None, None)
-        print("escritorio actualizado")
+        print("escritorio actualizado (%.0f ms, una sola vez)" % ((time.time() - t0) * 1000))
+        with open(DESK_OK, "w", encoding="utf-8") as f:
+            f.write("ok")
     except Exception:
         traceback.print_exc()
 

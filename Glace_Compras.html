@@ -341,8 +341,8 @@ tr.mrow.on .mpick{color:var(--brand-text)}
 :root{--v1:#B0336A;--v2:#E0457B;--v3:#F2A541;--v4:#FF8A5B;--v5:#1D9A84;--v6:#6D5BD0;--v7:#3CC4A8;
   --vgrad:linear-gradient(90deg,#7A1F4D,var(--v1) 20%,var(--v2) 40%,var(--v4) 60%,var(--v3) 80%,var(--v5));}
 html{background:var(--bg)}body{background:transparent}
-/* fondo de colores en una capa fija propia: se pinta una sola vez y no en cada paso del scroll */
-body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;will-change:transform;transform:translateZ(0);background:
+/* fondo de colores arriba de la página, se desplaza con ella: fijo costaba ~4 veces más al dibujar el primer scroll */
+body::before{content:"";position:absolute;top:0;left:0;right:0;height:100vh;z-index:-1;pointer-events:none;background:
   radial-gradient(900px 520px at 105% -10%,color-mix(in srgb,var(--v3) 18%,transparent),transparent 70%),
   radial-gradient(800px 520px at -10% 30%,color-mix(in srgb,var(--v2) 12%,transparent),transparent 70%),
   radial-gradient(700px 500px at 60% 120%,color-mix(in srgb,var(--v5) 12%,transparent),transparent 70%),var(--bg)}
@@ -377,12 +377,24 @@ section.panel>h2 .n{background:linear-gradient(135deg,var(--v1),var(--v4));color
 th{background:color-mix(in srgb,var(--v3) 12%,var(--surface))}
 tr.pk:hover td{box-shadow:inset 0 0 0 9999px color-mix(in srgb,var(--v3) 8%,transparent)}
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
+/* pantalla de carga: la página aparece recién armada, así el primer scroll ya es fluido */
+#boot{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+/* sin fundido: la pantalla de carga queda hasta que la página está lista y se cambia de una vez (un fundido se veía trabado mientras se preparaba el dibujo) */
+html{overflow-y:scroll} /* la barra de scroll siempre está: el ancho no cambia y la página no se rearma entera */
+.boot-in{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted,#9c8b94);font-size:14px}
+.boot-in b{color:var(--ink,#eee);font-size:18px}
+.boot-logo{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font:700 26px/1 Georgia,serif;color:#fff;background:linear-gradient(135deg,#7A1F4D,#E0457B 60%,#FF8A5B);margin-bottom:6px}
+.boot-bar{display:block;width:160px;height:3px;border-radius:3px;margin-top:8px;background:linear-gradient(90deg,transparent,#E0457B,transparent) 0 0/60% 100% no-repeat,rgba(127,127,127,.18);animation:bootbar 1.1s linear infinite}
+@keyframes bootbar{from{background-position:-100% 0,0 0}to{background-position:250% 0,0 0}}
+@media (prefers-reduced-motion:reduce){.boot-bar{animation:none}}
 .iadrop{margin:12px 0;padding:16px 18px;border:2px dashed var(--v1,#B8447D);border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--v1,#B8447D) 14%,transparent),color-mix(in srgb,var(--v3,#F2A541) 10%,transparent));cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .15s,transform .15s}
 .iadrop:hover,.iadrop.on{background:linear-gradient(135deg,color-mix(in srgb,var(--v1,#B8447D) 26%,transparent),color-mix(in srgb,var(--v3,#F2A541) 18%,transparent));transform:translateY(-1px)}
 .iadrop b{font-size:15px}.iadrop span{opacity:.8;font-size:13px}
 </style>
 </head>
 <body>
+<div id="boot" role="status" aria-live="polite"><div class="boot-in"><div class="boot-logo">G</div><b>Glacé Compras</b><span>Preparando las facturas…</span><i class="boot-bar"></i></div></div>
+<script>setTimeout(function () { if (window.bootDone) window.bootDone(true); else { var b = document.getElementById('boot'); if (b) b.remove(); } }, 7000);</script>
 <a class="skip" href="#cargar">Ir al contenido</a>
 
 <header class="top">
@@ -789,6 +801,7 @@ function fdt(ts) { var d = new Date(ts); return pad(d.getDate()) + '/' + pad(d.g
 function hostSend(c) { if (HOST) window.__outbox.push(c); }
 /* medición liviana: las pausas largas de la pantalla quedan en glace_log.txt (máximo 80 avisos) */
 var PERF = { n: 0 };
+window.addEventListener('resize', function () { perfNote('tamaño ' + innerWidth + 'x' + innerHeight, 0); });
 function perfNote(what, ms) { if (PERF.n++ < 80) hostSend({ cmd: 'perf', what: what, ms: Math.round(ms), at: Math.round(performance.now()) }); }
 try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { if (e.duration >= 50) perfNote('tarea larga', e.duration); }); }).observe({ type: 'longtask', buffered: true }); } catch (e) { }
 try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { // cuadro lento: cuánto fue script y cuánto estilo/diseño/pintado
@@ -2516,6 +2529,13 @@ function initManual() {
   var wrap = function (name) { var f = window[name]; if (typeof f !== 'function') return; window[name] = function () { var t = performance.now(), r = f.apply(this, arguments); var d = performance.now() - t; if (d >= 30) perfNote(name, d); return r; }; };
   ['render', 'renderManual', 'manSync', 'rebuildIdx', 'refreshLib', 'hostHello', 'manPaintThumbs', 'mvPaint', 'addChip', 'manDocs', 'renderMonths', 'renderList', 'renderTable', 'renderKpis'].forEach(wrap);
 })();
+window.bootDone = function (now) { // quita la pantalla de carga cuando la página ya está armada y dibujada
+  var b = document.getElementById('boot'); if (!b || b.__go) return; b.__go = 1;
+  var go = function () { if (b.parentNode) b.parentNode.removeChild(b); perfNote('pantalla visible', performance.now()); };
+  if (now) return go();
+  requestAnimationFrame(function () { requestAnimationFrame(function () { if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 900 }); else setTimeout(go, 80); }); });
+};
+var bootDone = window.bootDone;
 (async function init() {
   var drop = $('#drop'), inF = $('#inFiles'), inD = $('#inFolder');
   $('#btnFiles').onclick = function () { inF.click(); };
@@ -2559,6 +2579,7 @@ function initManual() {
   if (hasDir) { S.dir = await cfgGet('dir'); try { if (S.dir) { var pm = await S.dir.queryPermission({ mode: 'read' }); S.dirOk = pm === 'granted'; } } catch (e) { S.dir = null; } }
   await refreshLib(); render();
   hostHello();
+  bootDone();
   if (S.dir && S.dirOk) { try { await syncDir(S.dir); await refreshLib(); } catch (e) { setStatus('No se pudo leer la carpeta: ' + e.message, true); } }
   window.addEventListener('focus', function () { if (S.dir && S.dirOk && S.rows.length && !S.syncing) { S.syncing = true; syncDir(S.dir).then(refreshLib).catch(function () { }).then(function () { S.syncing = false; }); } });
   window.__kiah = { S: S, monthOfRows: monthOfRows, monthStats: monthStats, setCur: setCur, mesLabel: mesLabel, handleFiles: handleFiles, buildTables: buildTables, readXlsx: readXlsx, writeXlsx: writeXlsx, parseDEs: parseDEs, syncDir: syncDir, backupJson: backupJson, check: check, man: { docs: manDocs, key: manKey, de: manDe, totals: manTotals, recalc: manRecalc, lnNew: lnNew, prepare: manPrepare, addFiles: manAddFiles, select: manSelect, flush: manFlush, render: renderManual, find: manFind, rec: manRec, sanitize: manSanitize, memory: manMemory, normNum: normNum } };
