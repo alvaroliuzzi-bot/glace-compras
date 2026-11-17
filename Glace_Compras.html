@@ -787,6 +787,15 @@ function diaLabel(d8) {
 }
 function fdt(ts) { var d = new Date(ts); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 function hostSend(c) { if (HOST) window.__outbox.push(c); }
+/* medición liviana: las pausas largas de la pantalla quedan en glace_log.txt (máximo 80 avisos) */
+var PERF = { n: 0 };
+function perfNote(what, ms) { if (PERF.n++ < 80) hostSend({ cmd: 'perf', what: what, ms: Math.round(ms), at: Math.round(performance.now()) }); }
+try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { if (e.duration >= 50) perfNote('tarea larga', e.duration); }); }).observe({ type: 'longtask', buffered: true }); } catch (e) { }
+try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { // cuadro lento: cuánto fue script y cuánto estilo/diseño/pintado
+  if (e.duration < 100) return;
+  var end = e.startTime + e.duration, lay = e.styleAndLayoutStart ? end - e.styleAndLayoutStart : 0, sc = (e.scripts || []).map(function (x) { return (x.sourceFunctionName || x.invoker || '?') + ' ' + Math.round(x.duration); }).slice(0, 4).join(', ');
+  perfNote('cuadro lento · estilo+diseño ' + Math.round(lay) + ' ms · scripts: ' + (sc || '-'), e.duration);
+}); }).observe({ type: 'long-animation-frame', buffered: true }); } catch (e) { perfNote('sin LoAF', 0); }
 function b64(buf) { var u = buf instanceof Uint8Array ? buf : new Uint8Array(buf), s = '', i; for (i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); }
 
 /* ---------- biblioteca (IndexedDB) ---------- */
@@ -1124,7 +1133,7 @@ function render() {
   $('#chips').innerHTML = chips;
   var ctl = $('#ctl');
   if (!S.rows.length) {
-    ctl.innerHTML = monthBar() + '<div class="empty">Cargá primero el Excel de Marangatu del mes para ver el control.</div>';
+    ctl.innerHTML = monthBar() + '<div class="empty">Cargá primero el Excel de Marangatu del mes para ver el control.</div>'; ctl.__h = '';
     $('#btnXlsx').disabled = true; $('#btnCsv').disabled = true; $('#btnKpi').disabled = true;
     bindMonthBar(ctl); renderCols(); renderSteps(null); renderExpMes(null); manSync(); return;
   }
@@ -1177,6 +1186,8 @@ function render() {
   }
   html += '</tbody></table></div>';
   if (show.length > shown) html += '<div class="row" style="margin-top:12px;justify-content:center"><span class="mut" style="color:var(--muted);font-size:14px">Mostrando ' + shown + ' de ' + show.length + '</span><button class="btn sm" type="button" id="btnMore">Mostrar ' + PAGE + ' más</button><button class="btn sm" type="button" id="btnAll">Mostrar todo</button></div>';
+  if (ctl.__h !== html) { // si nada cambió no se vuelve a dibujar (al arrancar llegaban varios avisos seguidos y cada uno rearmaba todo)
+  ctl.__h = html;
   var keepQ = (document.activeElement && document.activeElement.id === 'q') ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null, keepSc = scrollKeys(ctl);
   ctl.innerHTML = html;
   scrollRestore(ctl, keepSc);
@@ -1218,6 +1229,7 @@ function render() {
   var cp = $('#btnCopyCdc'); if (cp) cp.onclick = function () { copyText(L.filter(function (x) { return x.st === 'pend' && x.r.cdcOk; }).map(function (x) { return x.r.cdc; }).join('\n'), cp); };
   var dl = $('#btnTxtCdc'); if (dl) dl.onclick = function () { download(new Blob([L.filter(function (x) { return x.st === 'pend' && x.r.cdcOk; }).map(function (x) { return x.r.cdc; }).join('\r\n')], { type: 'text/plain' }), expName('cdc_pendientes', 'txt')); };
   ctl.querySelectorAll('[data-gman]').forEach(function (b) { b.onclick = function () { manGo(b.getAttribute('data-gman')); }; });
+  }
   $('#btnXlsx').disabled = !(cnt.ok + cnt.dif + cnt.tot + A.extra.length + cnt.pend + cnt.nocdc); $('#btnCsv').disabled = $('#btnXlsx').disabled; $('#btnKpi').disabled = $('#btnXlsx').disabled;
   renderCols(); renderSteps(cnt); renderExpMes(cnt); manSync();
 }
@@ -2500,6 +2512,10 @@ function initManual() {
 }
 
 /* ---------- inicio ---------- */
+(function () { // cuánto tarda cada dibujo de la pantalla
+  var wrap = function (name) { var f = window[name]; if (typeof f !== 'function') return; window[name] = function () { var t = performance.now(), r = f.apply(this, arguments); var d = performance.now() - t; if (d >= 30) perfNote(name, d); return r; }; };
+  ['render', 'renderManual', 'manSync', 'rebuildIdx', 'refreshLib', 'hostHello', 'manPaintThumbs', 'mvPaint', 'addChip', 'manDocs', 'renderMonths', 'renderList', 'renderTable', 'renderKpis'].forEach(wrap);
+})();
 (async function init() {
   var drop = $('#drop'), inF = $('#inFiles'), inD = $('#inFolder');
   $('#btnFiles').onclick = function () { inF.click(); };
@@ -2530,13 +2546,15 @@ function initManual() {
   $('#btnXlsx').onclick = function () { doExport('xlsx'); };
   $('#btnKpi').onclick = doKpis;
   $('#btnCsv').onclick = function () { doExport('csv'); };
-  loadNodet();
-  applyLogo();
-  await dbOpen();
-  var saved = await dbAll(); saved.forEach(function (d) { S.de.set(d.cdc, d); });
-  await loadMonths();
-  await manLoad();
-  initManual();
+  var tp = performance.now(), fase = function (n) { var t = performance.now(); if (t - tp >= 20) perfNote('inicio: ' + n, t - tp); tp = t; };
+  perfNote('script cargado', tp);
+  loadNodet(); applyLogo(); fase('logo');
+  await dbOpen(); fase('abrir base');
+  var saved = await dbAll(); saved.forEach(function (d) { S.de.set(d.cdc, d); }); fase('leer XML guardados (' + saved.length + ')');
+  await loadMonths(); fase('leer meses');
+  await manLoad(); fase('leer manuales');
+  initManual(); fase('initManual');
+  perfNote('arranque listo', performance.now());
   Object.keys(S.months).sort().reverse().forEach(function (k) { var m = S.months[k]; addChip(mesLabel(k), m.rows.length + ' facturas · guardado' + (m.at ? ' el ' + new Date(m.at).toLocaleDateString('es-PY') : '')); });
   if (hasDir) { S.dir = await cfgGet('dir'); try { if (S.dir) { var pm = await S.dir.queryPermission({ mode: 'read' }); S.dirOk = pm === 'granted'; } } catch (e) { S.dir = null; } }
   await refreshLib(); render();

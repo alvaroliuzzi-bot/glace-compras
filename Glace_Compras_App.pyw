@@ -780,6 +780,15 @@ class Main(QMainWindow):
 
     # ---------- ciclo principal
     def tick(self):
+        t0 = time.time()
+        try:
+            self._tick()
+        finally:
+            d = (time.time() - t0) * 1000
+            if d > 40:
+                print("programa: ciclo lento %.0f ms" % d)
+
+    def _tick(self):
         self.left.page().runJavaScript("window.__takeOutbox ? window.__takeOutbox() : '[]'", self.on_outbox)
         now = time.time()
         for ln in self.lanes:
@@ -902,6 +911,8 @@ class Main(QMainWindow):
             self.lib_sync(c.get("known") or {})
         elif cmd == "lecturasDone":
             self.lec_done(c)
+        elif cmd == "perf":
+            print("pantalla: %s %s ms (a los %.1f s)" % (c.get("what"), c.get("ms"), (c.get("at") or 0) / 1000.0))
         elif cmd == "iaFotos":
             self.ia_fotos(c.get("files") or [])
         elif cmd == "iaFotoDone":
@@ -1350,7 +1361,7 @@ def chromium_flags():
     except OSError:
         return safe
     print("dibujo: con placa de video (scroll fluido)")
-    return "--enable-smooth-scrolling --enable-gpu-rasterization"
+    return "--enable-smooth-scrolling"
 
 
 def main():
