@@ -57,11 +57,15 @@ CDC_FILE = re.compile(r"^(\d{44})\.xml$", re.I)
 
 NLANES = 4          # 4 portales de e-Kuatia, en cuadrícula 2 x 2
 ZOOM = 0.5          # cada portal se ve reducido para que entre el formulario y el Häkchen
-HEAD_IDLE = "background:#2A1D24;color:#cdbfc6;padding:3px 8px;font-size:12px"
-HEAD_GO = "background:#B8447D;color:#ffffff;padding:3px 8px;font-size:12px;font-weight:bold"
-HEAD_BUSY = "background:#2F5E36;color:#ffffff;padding:3px 8px;font-size:12px"
-BTN_SKIP = ("QPushButton{background:#3a2a33;color:#e8dde3;border:0;padding:3px 10px;font-size:12px}"
-            "QPushButton:hover{background:#55404c}")
+# Encabezados de cada portal, con los colores de la página (degradados pflaume → coral → dorado).
+HEAD_IDLE = ("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #2A1D24,stop:1 #3A2230);"
+             "color:#e9dbe2;padding:4px 10px;font-size:12px;border-bottom:3px solid #B0336A")
+HEAD_GO = ("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #B0336A,stop:0.6 #E0457B,stop:1 #F2A541);"
+           "color:#ffffff;padding:4px 10px;font-size:12px;font-weight:bold")
+HEAD_BUSY = ("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #13685A,stop:1 #1D9A84);"
+             "color:#ffffff;padding:4px 10px;font-size:12px")
+BTN_SKIP = ("QPushButton{background:#6D5BD0;color:#ffffff;border:0;padding:4px 12px;font-size:12px;font-weight:bold}"
+            "QPushButton:hover{background:#8573E6}")
 
 
 def refresh_desktop():
