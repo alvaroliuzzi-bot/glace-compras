@@ -175,15 +175,16 @@ def run_test():
                 chk("tiempo total de la prueba", False, "más de 150 s en la fase " + ph)
                 return finish("tiempo agotado")
             if ph == "boot":
-                if all(l.ready for l in main.lanes) and S["left_ok"]:
-                    chk("los 4 portales cargaron la página (simulada)", True)
+                if S["left_ok"]:
+                    chk("los 4 portales arrancan en reposo (no cargan e-Kuatia hasta que hay facturas)",
+                        all(l.state == "free" and not l.pre and not l.ready for l in main.lanes))
                     chk("la ventana izquierda (Glacé Compras) cargó", True)
                     sz = main.size()
                     log("ventana %dx%d · portales:" % (sz.width(), sz.height()),
                         ["%dx%d" % (l.view.width(), l.view.height()) for l in main.lanes])
                     S["phase"] = "inject"
                 elif now - S["t"] > 40:
-                    chk("carga inicial", False, "ready=%s izquierda=%s" % ([l.ready for l in main.lanes], S["left_ok"]))
+                    chk("carga inicial", False, "izquierda=%s" % S["left_ok"])
                     return finish("no cargó")
             elif ph == "inject":
                 S["phase"] = "wait_inject"
