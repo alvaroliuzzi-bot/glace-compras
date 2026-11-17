@@ -1319,8 +1319,42 @@ class Main(QMainWindow):
         super().closeEvent(ev)
 
 
+GPU_TRY = os.path.join(HERE, ".gpu_probando")   # marca mientras se prueba la placa de video
+GPU_OFF = os.path.join(HERE, ".gpu_off")        # la placa de video falló una vez: se usa el modo seguro
+
+
+def _gpu_ok():
+    """El programa funcionó con placa de video: se quita la marca de prueba."""
+    try:
+        os.remove(GPU_TRY)
+    except OSError:
+        pass
+
+
+def chromium_flags():
+    """Con la placa de video el scroll es fluido. Si un arranque con placa de video se cerró de golpe
+    (quedó la marca .gpu_probando), se vuelve solo al modo seguro de antes y se recuerda en .gpu_off."""
+    safe = "--disable-gpu-compositing --enable-smooth-scrolling"
+    if os.environ.get("GLACE_SIN_GPU") == "1" or os.path.exists(GPU_OFF):
+        print("dibujo: modo seguro (sin placa de video)")
+        return safe
+    try:
+        if os.path.exists(GPU_TRY):
+            with open(GPU_OFF, "w", encoding="utf-8") as f:
+                f.write("El arranque con placa de video se cerró de golpe. Borrá este archivo para volver a probar.\n")
+            _gpu_ok()
+            print("dibujo: el intento con placa de video falló; modo seguro desde ahora")
+            return safe
+        with open(GPU_TRY, "w", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S"))
+    except OSError:
+        return safe
+    print("dibujo: con placa de video (scroll fluido)")
+    return "--enable-smooth-scrolling --enable-gpu-rasterization"
+
+
 def main():
-    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-compositing --enable-smooth-scrolling")   # rueda del mouse suave
+    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", chromium_flags())
     app = QApplication(sys.argv)
     app.setApplicationName("Glacé Compras")
     lock = QLockFile(os.path.join(tempfile.gettempdir(), "glace_compras.lock"))
@@ -1330,7 +1364,9 @@ def main():
     w = Main()
     w.show()
     QTimer.singleShot(1500, refresh_desktop)
+    QTimer.singleShot(20000, _gpu_ok)          # 20 s funcionando: la placa de video sirve
     code = app.exec()
+    _gpu_ok()
     lock.unlock()
     sys.exit(code)
 

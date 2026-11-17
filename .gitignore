@@ -14,3 +14,5 @@ __pycache__/
 # IA local: configuración y estado propios de cada computadora; copias de respaldo
 ia_local.json
 *.bak
+.gpu_probando
+.gpu_off
