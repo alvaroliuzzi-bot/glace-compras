@@ -62,8 +62,10 @@ En **Facturas manuales**, la zona **«Subir fotos de facturas · la IA completa 
 - marca como **dudoso** lo que no se lee bien y como **falta** lo que la factura no dice: eso lo completa la persona;
 - nunca pisa los ítems cargados a mano.
 
-**Preparación (una sola vez):** instalar [Bionic](https://lmstudio.ai) (o LM Studio / Ollama), descargar el modelo **Qwen3-VL-8B-Instruct** y encender el *servidor local* (API für lokale Modelle). Abajo a la derecha el programa muestra **● IA local: lista** cuando todo está bien.
+**Preparación (una sola vez):** instalar [Bionic](https://lmstudio.ai/download) (o LM Studio / Ollama), descargar el modelo **Qwen3-VL-8B-Instruct** y encender el *servidor local* (API für lokale Modelle). Abajo a la derecha el programa muestra **● IA local: lista** cuando todo está bien.
 En una notebook sin placa de video tarda unos **5 minutos por foto**. Opcional: `ia_local.json` (`url`, `modelo`, `activo`).
+
+📖 **[Guía completa de la IA local](docs/IA_local.md)**: instalación paso a paso, uso diario, consejos para las fotos y solución de problemas.
 
 <img src=".github/assets/divider.svg" width="100%">
 
