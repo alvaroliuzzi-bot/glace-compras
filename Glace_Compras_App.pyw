@@ -7,6 +7,7 @@ escribir la CDC, Consultar, Descargar el XML, guardarlo en la biblioteca y prepa
 la siguiente factura en el mismo portal (rondas de 4)."""
 import os, sys, re, json, time, shutil, tempfile, traceback, faulthandler, base64, hashlib
 from collections import deque
+import threading
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 try:
@@ -40,6 +41,12 @@ except Exception:
     raise
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+try:                                   # lector de fotos con IA local (lector_local.py); si falta, el programa sigue igual
+    sys.path.insert(0, HERE)
+    import lector_local
+except Exception:
+    traceback.print_exc()
+    lector_local = None
 HTML = os.path.join(HERE, "Glace_Compras.html")
 HELP = os.path.join(HERE, "ek_helpers.js")
 ICON = os.path.join(HERE, "Glace_Compras.ico")
@@ -54,6 +61,8 @@ PROFILE_SUFFIX = os.environ.get("GLACE_PROFILE_SUFFIX", "")
 LIB = os.environ.get("GLACE_LIB_DIR") or os.path.join(HERE, "Biblioteca")
 LEGACY_XML = os.path.join(HERE, "XML_Facturas")     # carpeta de versiones anteriores (se copia a la biblioteca)
 CDC_FILE = re.compile(r"^(\d{44})\.xml$", re.I)
+IA_INBOX = os.path.join(LIB, "_Entrada_IA")     # fotos para que la IA local lea todo y registre la factura sola
+IA_EXT = ("jpg", "png", "webp", "gif", "pdf")
 
 NLANES = 4          # 4 portales de e-Kuatia, en cuadrícula 2 x 2
 ZOOM = 0.5          # cada portal se ve reducido para que entre el formulario y el Häkchen
@@ -66,10 +75,25 @@ HEAD_BUSY = ("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #13685A,stop
              "color:#ffffff;padding:4px 10px;font-size:12px")
 BTN_SKIP = ("QPushButton{background:#6D5BD0;color:#ffffff;border:0;padding:4px 12px;font-size:12px;font-weight:bold}"
             "QPushButton:hover{background:#8573E6}")
+PARKED_HTML = ("<html><body style='margin:0;background:linear-gradient(135deg,#1f171c,#2a1d24);color:#b9a6b0;font:28px sans-serif;"
+               "display:flex;align-items:center;justify-content:center;height:100vh'>"
+               "Portal %d en reposo · se abre solo al consultar facturas</body></html>")
+
+
+DESK_OK = os.path.join(HERE, ".escritorio_ok")
 
 
 def refresh_desktop():
-    """Avisa a Windows que el escritorio cambió (como pulsar F5): quita iconos viejos."""
+    """Avisa a Windows que el escritorio cambió (como pulsar F5): quita iconos viejos.
+    Hace falta una sola vez (después de crear el acceso directo) y corre aparte: Windows recarga los
+    íconos de todo el sistema y, si el programa lo esperara, la ventana se trababa al arrancar."""
+    if os.path.exists(DESK_OK):
+        return
+    threading.Thread(target=_refresh_desktop, daemon=True, name="escritorio").start()
+
+
+def _refresh_desktop():
+    t0 = time.time()
     try:
         import ctypes
         sh = ctypes.windll.shell32
@@ -84,7 +108,9 @@ def refresh_desktop():
                 buf = ctypes.create_unicode_buffer(d)
                 sh.SHChangeNotify(SHCNE_UPDATEDIR, SHCNF_PATHW | SHCNF_FLUSH, buf, None)
         sh.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_FLUSH, None, None)
-        print("escritorio actualizado")
+        print("escritorio actualizado (%.0f ms, una sola vez)" % ((time.time() - t0) * 1000))
+        with open(DESK_OK, "w", encoding="utf-8") as f:
+            f.write("ok")
     except Exception:
         traceback.print_exc()
 
@@ -468,9 +494,18 @@ class Lane:
         self.t = time.time()
 
     def free_up(self):
-        """Libera el portal y precarga e-Kuatia para la siguiente factura."""
+        """Libera el portal. Si quedan facturas en cola precarga e-Kuatia; si no, lo deja en reposo
+        (una página vacía no gasta procesador ni memoria como e-Kuatia abierto)."""
         self.reset()
-        self.prewarm()
+        if self.main.queue:
+            self.prewarm()
+        else:
+            self.park()
+
+    def park(self):
+        self.ready = False
+        self.pre = False
+        self.view.setHtml(PARKED_HTML % (self.idx + 1))
 
     def prewarm(self):
         self.ready = False
@@ -695,7 +730,7 @@ class Main(QMainWindow):
             self.right_col.setStretchFactor(self.right_col.count() - 1, 1)
         self.left.load(QUrl.fromLocalFile(HTML))
         for ln in self.lanes:
-            ln.prewarm()                # los 4 portales muestran e-Kuatia desde el arranque
+            ln.park()                   # los portales se abren recién cuando hay facturas para consultar (arranque rápido)
 
         sp = QSplitter(Qt.Orientation.Horizontal)
         sp.addWidget(self.left)
@@ -706,12 +741,45 @@ class Main(QMainWindow):
         self.setCentralWidget(sp)
         self.lbl = QLabel("Listo.")
         self.statusBar().addWidget(self.lbl)
+        self.ia_lbl = QLabel("IA local: buscando…")
+        self.ia_lbl.setStyleSheet("padding:2px 10px;border-radius:9px;background:#3a2a33;color:#e8dde3")
+        self.ia_lbl.setToolTip("Lee solas las fotos de facturas manuales sin ítems, con la IA de esta computadora (Bionic).")
+        self.ia_btn = QPushButton("Leer fotos con IA")
+        self.ia_btn.setToolTip("Buscar ya facturas con foto y sin ítems y leerlas con la IA local")
+        self.ia_btn.clicked.connect(self.on_ia_now)
+        self.statusBar().addPermanentWidget(self.ia_lbl)
+        self.statusBar().addPermanentWidget(self.ia_btn)
         self.resize(1420, 880)
         self.showMaximized()
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(700)
+
+        # --- IA local: lee en segundo plano las fotos de facturas manuales sin ítems
+        self.ia_msg = ""
+        self.ia_shown = ""
+        self.ia_stop = threading.Event()
+        self.ia_wake = threading.Event()
+        self.ia_out = deque()            # lecturas de la entrada que esperan ser registradas en la pantalla
+        self.ia_cur = None               # (ruta, nombre, desde cuándo, json) que la pantalla está registrando
+        self.ia_state = None             # (lista, texto) que manda el hilo de la IA
+        self.ia_state_shown = None
+        if lector_local:
+            def _ia_status(msg):
+                print(msg)
+                self.ia_msg = msg
+            def _ia_estado(ok, text):
+                print(text)
+                self.ia_state = (ok, text)
+            def _ia_deliver(path, text, err):
+                self.ia_out.append((path, text, err))
+            threading.Thread(target=lector_local.watch,
+                             kwargs={"status": _ia_status, "stop": self.ia_stop, "wake": self.ia_wake, "on_estado": _ia_estado,
+                                     "deliver": _ia_deliver},
+                             daemon=True, name="ia-local").start()
+        else:
+            self.ia_state = (False, "IA local: falta lector_local.py")
 
     # ---------- utilidades
     def js_left(self, call):
@@ -730,6 +798,15 @@ class Main(QMainWindow):
 
     # ---------- ciclo principal
     def tick(self):
+        t0 = time.time()
+        try:
+            self._tick()
+        finally:
+            d = (time.time() - t0) * 1000
+            if d > 40:
+                print("programa: ciclo lento %.0f ms" % d)
+
+    def _tick(self):
         self.left.page().runJavaScript("window.__takeOutbox ? window.__takeOutbox() : '[]'", self.on_outbox)
         now = time.time()
         for ln in self.lanes:
@@ -738,6 +815,88 @@ class Main(QMainWindow):
         self.update_ui()
         self.feed_step()
         self.lec_step()
+        if self.ia_msg != self.ia_shown:     # mensajes del lector de fotos con IA local
+            self.ia_shown = self.ia_msg
+            self.lbl.setText(self.ia_msg)
+        self.ia_step()
+        if self.ia_state and self.ia_state != self.ia_state_shown:
+            self.ia_state_shown = self.ia_state
+            ok, text = self.ia_state
+            self.ia_lbl.setText(("● " if ok else "○ ") + text)
+            self.ia_lbl.setStyleSheet("padding:2px 10px;border-radius:9px;color:#ffffff;background:%s" % ("#2F5E36" if ok else "#7a3b2e"))
+
+    # ---------- fotos para la IA: Biblioteca\_Entrada_IA
+    def ia_fotos(self, files):
+        """La persona subió fotos solo para la IA: se dejan en la entrada y la IA empieza enseguida."""
+        n = 0
+        os.makedirs(IA_INBOX, exist_ok=True)
+        for f in files[:40]:
+            ext = str(f.get("ext") or "jpg").lower()
+            if ext not in IA_EXT:
+                continue
+            base = re.sub(r"[^0-9A-Za-z_\- ]", "_", os.path.splitext(os.path.basename(str(f.get("name") or "foto")))[0])[:80] or "foto"
+            data = base64.b64decode(f.get("b64") or "")
+            if not data or len(data) > MAN_MAX:
+                continue
+            write_atomic(os.path.join(IA_INBOX, lib_unique(IA_INBOX, "%s.%s" % (base, ext))), data)
+            n += 1
+        if n:
+            self.lbl.setText("IA local: %d foto(s) recibida(s), leyendo…" % n)
+            self.ia_wake.set()
+
+    def ia_move(self, path, sub):
+        try:
+            d = os.path.join(IA_INBOX, sub)
+            os.makedirs(d, exist_ok=True)
+            os.replace(path, os.path.join(d, lib_unique(d, os.path.basename(path))))
+        except OSError:
+            traceback.print_exc()
+        if lector_local:
+            lector_local.confirmar(path)
+
+    def ia_step(self):
+        """Entrega a la pantalla, de a una, las facturas que la IA leyó de la entrada."""
+        if self.ia_cur:
+            if time.time() - self.ia_cur[2] < 120:
+                return
+            print("IA local: la pantalla no confirmó", self.ia_cur[1])
+            self.ia_out.appendleft((self.ia_cur[0], self.ia_cur[3], ""))
+            self.ia_cur = None
+        if not (self.ia_out and self.page_ready) or self.feed:
+            return
+        path, text, err = self.ia_out.popleft()
+        name = os.path.basename(path)
+        if not text or not os.path.isfile(path):
+            if os.path.isfile(path):
+                self.ia_move(path, "_no_leidas")
+            self.lbl.setText("IA local: no pude leer «%s» (%s). Quedó en _Entrada_IA\\_no_leidas." % (name, err or "sin respuesta"))
+            return
+        ext = name.rsplit(".", 1)[-1].lower()
+        mime = MAN_MIME.get("jpg" if ext == "jpeg" else ext, "image/jpeg")
+        with open(path, "rb") as f:
+            data = base64.b64encode(f.read()).decode("ascii")
+        self.ia_cur = (path, name, time.time(), text)
+        self.lbl.setText("IA local: registrando «%s»…" % name)
+        self.js_left("window.__iaFoto && window.__iaFoto(%s, %s, %s, %s)" % (json.dumps(text), json.dumps(data), json.dumps(mime), json.dumps(name)))
+
+    def ia_done(self, c):
+        cur = self.ia_cur
+        if not cur or cur[1] != str(c.get("name") or ""):
+            return
+        self.ia_cur = None
+        ok = bool(c.get("ok"))
+        self.ia_move(cur[0], "_procesadas" if ok else "_no_leidas")
+        msg = str(c.get("msg") or "")[:200]
+        self.ia_msg = self.ia_shown = ""
+        self.lbl.setText(("IA local: " + msg) if ok else ("IA local: no se pudo registrar «%s»: %s" % (cur[1], msg)))
+
+    def on_ia_now(self):
+        if not lector_local:
+            self.lbl.setText("Falta el archivo lector_local.py en la carpeta del programa.")
+            return
+        self.lbl.setText("IA local: buscando facturas con foto sin ítems…")
+        lector_local.avisar[0] = True
+        self.ia_wake.set()
 
     def on_outbox(self, res):
         try:
@@ -770,6 +929,12 @@ class Main(QMainWindow):
             self.lib_sync(c.get("known") or {})
         elif cmd == "lecturasDone":
             self.lec_done(c)
+        elif cmd == "perf":
+            print("pantalla: %s %s ms (a los %.1f s)" % (c.get("what"), c.get("ms"), (c.get("at") or 0) / 1000.0))
+        elif cmd == "iaFotos":
+            self.ia_fotos(c.get("files") or [])
+        elif cmd == "iaFotoDone":
+            self.ia_done(c)
         elif cmd == "saveExcel":
             path = lib_save_excel(c.get("month"), c.get("name"), base64.b64decode(c.get("b64") or ""))
             self.lbl.setText("Excel guardado en la biblioteca: " + path)
@@ -791,6 +956,9 @@ class Main(QMainWindow):
             try:
                 folder = lib_save_manual(c)
                 self.lbl.setText("Factura manual guardada en la biblioteca: " + folder)
+                if c.get("files") and not c.get("remove") and lector_local:   # foto nueva: la IA local la lee enseguida
+                    self.lbl.setText("Foto guardada · la IA local empieza a leerla…")
+                    self.ia_wake.set()
                 self.js_left("window.__hostManualAck && window.__hostManualAck(%s, true, '')" % json.dumps(key))
             except Exception as e:
                 traceback.print_exc()
@@ -1173,14 +1341,49 @@ class Main(QMainWindow):
     def closeEvent(self, ev):
         try:
             self.timer.stop()
+            self.ia_stop.set()
             shutil.rmtree(self.tmp, ignore_errors=True)
         except Exception:
             pass
         super().closeEvent(ev)
 
 
+GPU_TRY = os.path.join(HERE, ".gpu_probando")   # marca mientras se prueba la placa de video
+GPU_OFF = os.path.join(HERE, ".gpu_off")        # la placa de video falló una vez: se usa el modo seguro
+
+
+def _gpu_ok():
+    """El programa funcionó con placa de video: se quita la marca de prueba."""
+    try:
+        os.remove(GPU_TRY)
+    except OSError:
+        pass
+
+
+def chromium_flags():
+    """Con la placa de video el scroll es fluido. Si un arranque con placa de video se cerró de golpe
+    (quedó la marca .gpu_probando), se vuelve solo al modo seguro de antes y se recuerda en .gpu_off."""
+    safe = "--disable-gpu-compositing --enable-smooth-scrolling"
+    if os.environ.get("GLACE_SIN_GPU") == "1" or os.path.exists(GPU_OFF):
+        print("dibujo: modo seguro (sin placa de video)")
+        return safe
+    try:
+        if os.path.exists(GPU_TRY):
+            with open(GPU_OFF, "w", encoding="utf-8") as f:
+                f.write("El arranque con placa de video se cerró de golpe. Borrá este archivo para volver a probar.\n")
+            _gpu_ok()
+            print("dibujo: el intento con placa de video falló; modo seguro desde ahora")
+            return safe
+        with open(GPU_TRY, "w", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S"))
+    except OSError:
+        return safe
+    print("dibujo: con placa de video (scroll fluido)")
+    return "--enable-smooth-scrolling"
+
+
 def main():
-    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu-compositing")
+    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", chromium_flags())
     app = QApplication(sys.argv)
     app.setApplicationName("Glacé Compras")
     lock = QLockFile(os.path.join(tempfile.gettempdir(), "glace_compras.lock"))
@@ -1190,7 +1393,9 @@ def main():
     w = Main()
     w.show()
     QTimer.singleShot(1500, refresh_desktop)
+    QTimer.singleShot(20000, _gpu_ok)          # 20 s funcionando: la placa de video sirve
     code = app.exec()
+    _gpu_ok()
     lock.unlock()
     sys.exit(code)
 

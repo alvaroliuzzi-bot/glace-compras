@@ -10,3 +10,10 @@ glace_log.txt
 *.zip
 __pycache__/
 !docs/img/*.jpg
+
+# IA local: configuración y estado propios de cada computadora; copias de respaldo
+ia_local.json
+*.bak
+.gpu_probando
+.gpu_off
+.escritorio_ok

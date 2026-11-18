@@ -23,7 +23,7 @@
 flowchart LR
     M["📊 Marangatu<br/>total por factura"]:::plum --> APP
     K["🌐 e-Kuatia × 4<br/>XML por CDC"]:::gold --> APP
-    F["📄 Facturas de papel<br/>foto + carga a mano"]:::grey --> APP
+    F["📄 Facturas de papel<br/>foto → IA local lee todo"]:::grey --> APP
     APP{"🧾 Glacé Compras<br/>compara totales"}:::pink --> X["📗 Excel para e-Karú<br/>Cabecera · Detalle · Pendientes"]:::teal
     classDef plum fill:#5E1239,stroke:#B0336A,color:#fff
     classDef gold fill:#F2A541,stroke:#B8801A,color:#14231F
@@ -44,10 +44,26 @@ e-Karú necesita el **detalle** de cada compra (producto, cantidad, precio), per
 |---|---|
 | **1 · Cargar el Excel del mes** | Lee «DetalleComprobantesRegistrados» de Marangatu y lo guarda por mes |
 | **2 · Buscar XML y controlar** | Abre **4 portales de e-Kuatia a la vez**: la persona solo marca «No soy un robot»; el programa escribe la CDC, consulta, descarga el XML y compara el total con Marangatu |
-| **3 · Exportar para e-Karú** | Un Excel con hojas Cabecera, Detalle y Pendientes; las facturas de papel se cargan a mano con foto |
+| **3 · Exportar para e-Karú** | Un Excel con hojas Cabecera, Detalle y Pendientes |
+| **📷 Facturas de papel** | Solo se sube la foto: la **IA local** lee proveedor, RUC, número, timbrado, fecha, total e ítems y registra la factura sola |
 
 <p align="center"><img src="docs/img/inicio.jpg" width="60%" alt="Pantalla de inicio"></p>
 <p align="center"><img src="docs/img/exportar.jpg" width="85%" alt="Exportar para e-Karú"></p>
+
+<img src=".github/assets/divider.svg" width="100%">
+
+## 🤖 IA local para las facturas de papel
+
+En **Facturas manuales**, la zona **«Subir fotos de facturas · la IA completa todo»** (o la carpeta `Biblioteca\_Entrada_IA`) recibe fotos o PDF. La IA corre **en la misma computadora** (sin internet ni costo):
+
+- lee la cabecera (proveedor, RUC, número, timbrado, fecha, condición, total, IVA) y todos los ítems;
+- si la factura figura en el Excel de Marangatu le agrega foto e ítems; si no, la crea como factura manual; si es electrónica, avisa que su XML se busca en el paso 2;
+- controla cantidad × precio y que la suma dé el total; si no cierra, la IA revisa la foto una segunda vez;
+- marca como **dudoso** lo que no se lee bien y como **falta** lo que la factura no dice: eso lo completa la persona;
+- nunca pisa los ítems cargados a mano.
+
+**Preparación (una sola vez):** instalar [Bionic](https://lmstudio.ai) (o LM Studio / Ollama), descargar el modelo **Qwen3-VL-8B-Instruct** y encender el *servidor local* (API für lokale Modelle). Abajo a la derecha el programa muestra **● IA local: lista** cuando todo está bien.
+En una notebook sin placa de video tarda unos **5 minutos por foto**. Opcional: `ia_local.json` (`url`, `modelo`, `activo`).
 
 <img src=".github/assets/divider.svg" width="100%">
 
@@ -65,6 +81,7 @@ e-Karú necesita el **detalle** de cada compra (producto, cantidad, precio), per
 | `Glace_Compras_App.pyw` | Ventana principal y automatización de los 4 portales |
 | `Glace_Compras.html` | Interfaz: meses, proveedores, facturas manuales, exportación |
 | `ek_helpers.js` | Funciones que se inyectan en el portal de e-Kuatia |
+| `lector_local.py` | Lector de facturas con IA local (fotos y PDF → cabecera e ítems) |
 | `tools/selftest.pyw` | Prueba automática del programa (`tools/Probar.bat`) |
 | `docs/` | Documento del sistema y resultados de la encuesta al personal de caja |
 

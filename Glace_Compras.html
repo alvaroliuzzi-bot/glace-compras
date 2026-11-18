@@ -340,10 +340,12 @@ tr.mrow.on .mpick{color:var(--brand-text)}
 /* ===== Diseño vivo (colores y vida, sin cambiar funciones) ===== */
 :root{--v1:#B0336A;--v2:#E0457B;--v3:#F2A541;--v4:#FF8A5B;--v5:#1D9A84;--v6:#6D5BD0;--v7:#3CC4A8;
   --vgrad:linear-gradient(90deg,#7A1F4D,var(--v1) 20%,var(--v2) 40%,var(--v4) 60%,var(--v3) 80%,var(--v5));}
-body{background:
+html{background:var(--bg)}body{background:transparent}
+/* fondo de colores arriba de la página, se desplaza con ella: fijo costaba ~4 veces más al dibujar el primer scroll */
+body::before{content:"";position:absolute;top:0;left:0;right:0;height:100vh;z-index:-1;pointer-events:none;background:
   radial-gradient(900px 520px at 105% -10%,color-mix(in srgb,var(--v3) 18%,transparent),transparent 70%),
   radial-gradient(800px 520px at -10% 30%,color-mix(in srgb,var(--v2) 12%,transparent),transparent 70%),
-  radial-gradient(700px 500px at 60% 120%,color-mix(in srgb,var(--v5) 12%,transparent),transparent 70%),var(--bg);background-attachment:fixed}
+  radial-gradient(700px 500px at 60% 120%,color-mix(in srgb,var(--v5) 12%,transparent),transparent 70%),var(--bg)}
 .top{position:relative;border-bottom:0;box-shadow:0 6px 24px -16px rgba(122,31,77,.5)}
 .top::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--vgrad)}
 .brand-mark{background:linear-gradient(135deg,#7A1F4D,var(--v2) 60%,var(--v4));box-shadow:0 6px 16px -8px var(--v2)}
@@ -375,9 +377,24 @@ section.panel>h2 .n{background:linear-gradient(135deg,var(--v1),var(--v4));color
 th{background:color-mix(in srgb,var(--v3) 12%,var(--surface))}
 tr.pk:hover td{box-shadow:inset 0 0 0 9999px color-mix(in srgb,var(--v3) 8%,transparent)}
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
+/* pantalla de carga: la página aparece recién armada, así el primer scroll ya es fluido */
+#boot{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+/* sin fundido: la pantalla de carga queda hasta que la página está lista y se cambia de una vez (un fundido se veía trabado mientras se preparaba el dibujo) */
+html{overflow-y:scroll} /* la barra de scroll siempre está: el ancho no cambia y la página no se rearma entera */
+.boot-in{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted,#9c8b94);font-size:14px}
+.boot-in b{color:var(--ink,#eee);font-size:18px}
+.boot-logo{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font:700 26px/1 Georgia,serif;color:#fff;background:linear-gradient(135deg,#7A1F4D,#E0457B 60%,#FF8A5B);margin-bottom:6px}
+.boot-bar{display:block;width:160px;height:3px;border-radius:3px;margin-top:8px;background:linear-gradient(90deg,transparent,#E0457B,transparent) 0 0/60% 100% no-repeat,rgba(127,127,127,.18);animation:bootbar 1.1s linear infinite}
+@keyframes bootbar{from{background-position:-100% 0,0 0}to{background-position:250% 0,0 0}}
+@media (prefers-reduced-motion:reduce){.boot-bar{animation:none}}
+.iadrop{margin:12px 0;padding:16px 18px;border:2px dashed var(--v1,#B8447D);border-radius:14px;background:linear-gradient(135deg,color-mix(in srgb,var(--v1,#B8447D) 14%,transparent),color-mix(in srgb,var(--v3,#F2A541) 10%,transparent));cursor:pointer;display:flex;flex-direction:column;gap:4px;transition:background .15s,transform .15s}
+.iadrop:hover,.iadrop.on{background:linear-gradient(135deg,color-mix(in srgb,var(--v1,#B8447D) 26%,transparent),color-mix(in srgb,var(--v3,#F2A541) 18%,transparent));transform:translateY(-1px)}
+.iadrop b{font-size:15px}.iadrop span{opacity:.8;font-size:13px}
 </style>
 </head>
 <body>
+<div id="boot" role="status" aria-live="polite"><div class="boot-in"><div class="boot-logo">G</div><b>Glacé Compras</b><span>Preparando las facturas…</span><i class="boot-bar"></i></div></div>
+<script>setTimeout(function () { if (window.bootDone) window.bootDone(true); else { var b = document.getElementById('boot'); if (b) b.remove(); } }, 7000);</script>
 <a class="skip" href="#cargar">Ir al contenido</a>
 
 <header class="top">
@@ -782,6 +799,16 @@ function diaLabel(d8) {
 }
 function fdt(ts) { var d = new Date(ts); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 function hostSend(c) { if (HOST) window.__outbox.push(c); }
+/* medición liviana: las pausas largas de la pantalla quedan en glace_log.txt (máximo 80 avisos) */
+var PERF = { n: 0 };
+window.addEventListener('resize', function () { perfNote('tamaño ' + innerWidth + 'x' + innerHeight, 0); });
+function perfNote(what, ms) { if (PERF.n++ < 80) hostSend({ cmd: 'perf', what: what, ms: Math.round(ms), at: Math.round(performance.now()) }); }
+try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { if (e.duration >= 50) perfNote('tarea larga', e.duration); }); }).observe({ type: 'longtask', buffered: true }); } catch (e) { }
+try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { // cuadro lento: cuánto fue script y cuánto estilo/diseño/pintado
+  if (e.duration < 100) return;
+  var end = e.startTime + e.duration, lay = e.styleAndLayoutStart ? end - e.styleAndLayoutStart : 0, sc = (e.scripts || []).map(function (x) { return (x.sourceFunctionName || x.invoker || '?') + ' ' + Math.round(x.duration); }).slice(0, 4).join(', ');
+  perfNote('cuadro lento · estilo+diseño ' + Math.round(lay) + ' ms · scripts: ' + (sc || '-'), e.duration);
+}); }).observe({ type: 'long-animation-frame', buffered: true }); } catch (e) { perfNote('sin LoAF', 0); }
 function b64(buf) { var u = buf instanceof Uint8Array ? buf : new Uint8Array(buf), s = '', i; for (i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); }
 
 /* ---------- biblioteca (IndexedDB) ---------- */
@@ -1097,7 +1124,7 @@ function rowHtml(x) {
   if (pk) { cl.push('pk'); if (S.flight.has(r.cdc)) cl.push('cur'); if (S.sel.indexOf(r.cdc) >= 0) cl.push('sel'); }
   if (done) cl.push('done');
   var sx = done ? ' class="sx"' : '';
-  var h = '<tr data-d="' + dayOf(x) + '"' + (cl.length ? ' class="' + cl.join(' ') + '"' : '') + (pk ? ' data-pk="' + r.cdc + '" title="Clic: elegir / quitar (máximo 4)"' : (done ? ' title="' + (man ? (de && de.lec ? 'Factura manual: detalle leído de la foto por Claude' : 'Factura manual: detalle cargado a mano') : 'CDC ya buscada: XML descargado') + (de && de.at ? ' el ' + fdt(de.at) : '') + '"' : '')) + '>'
+  var h = '<tr data-d="' + dayOf(x) + '"' + (cl.length ? ' class="' + cl.join(' ') + '"' : '') + (pk ? ' data-pk="' + r.cdc + '" title="Clic: elegir / quitar (máximo 4)"' : (done ? ' title="' + (man ? (de && de.lec ? 'Factura manual: detalle leído de la foto por la IA' : 'Factura manual: detalle cargado a mano') : 'CDC ya buscada: XML descargado') + (de && de.at ? ' el ' + fdt(de.at) : '') + '"' : '')) + '>'
     + '<td><button type="button" class="exp" data-x="' + cdc + '" aria-expanded="' + open + '" aria-label="Ver detalle">' + ICON.chev + '</button></td>'
     + '<td' + sx + '>' + esc(nm) + (man ? ' <span class="tag">Manual</span>' : '') + '</td><td class="mono nb' + (done ? ' sx' : '') + '">' + esc(r ? r.numero : de.numero) + '</td>'
     + '<td class="num' + (done ? ' sx' : '') + '">' + fmt(r ? r.total : de.tot.total) + '</td><td class="num">' + (man ? '<button type="button" class="lnk" data-gman="' + esc(mkey) + '" aria-label="' + (de ? 'Editar el detalle de la factura manual de ' : 'Cargar el detalle de la factura manual de ') + esc(nm) + '">' + (de ? de.items.length : 'Cargar') + '</button>' : (de ? de.items.length : '–')) + '</td><td>' + ((r && (x.st === 'pend' || x.st === 'tot' || x.st === 'nocdc')) ? '<label class="ndl"><input type="checkbox" data-nd="' + esc(supKey(r)) + '" data-nm="' + esc(r.proveedor) + '"' + (S.nodet[supKey(r)] ? ' checked' : '') + ' aria-label="Solo total para ' + esc(r.proveedor) + '"></label>' : '') + '</td>'
@@ -1119,7 +1146,7 @@ function render() {
   $('#chips').innerHTML = chips;
   var ctl = $('#ctl');
   if (!S.rows.length) {
-    ctl.innerHTML = monthBar() + '<div class="empty">Cargá primero el Excel de Marangatu del mes para ver el control.</div>';
+    ctl.innerHTML = monthBar() + '<div class="empty">Cargá primero el Excel de Marangatu del mes para ver el control.</div>'; ctl.__h = '';
     $('#btnXlsx').disabled = true; $('#btnCsv').disabled = true; $('#btnKpi').disabled = true;
     bindMonthBar(ctl); renderCols(); renderSteps(null); renderExpMes(null); manSync(); return;
   }
@@ -1172,6 +1199,8 @@ function render() {
   }
   html += '</tbody></table></div>';
   if (show.length > shown) html += '<div class="row" style="margin-top:12px;justify-content:center"><span class="mut" style="color:var(--muted);font-size:14px">Mostrando ' + shown + ' de ' + show.length + '</span><button class="btn sm" type="button" id="btnMore">Mostrar ' + PAGE + ' más</button><button class="btn sm" type="button" id="btnAll">Mostrar todo</button></div>';
+  if (ctl.__h !== html) { // si nada cambió no se vuelve a dibujar (al arrancar llegaban varios avisos seguidos y cada uno rearmaba todo)
+  ctl.__h = html;
   var keepQ = (document.activeElement && document.activeElement.id === 'q') ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null, keepSc = scrollKeys(ctl);
   ctl.innerHTML = html;
   scrollRestore(ctl, keepSc);
@@ -1213,6 +1242,7 @@ function render() {
   var cp = $('#btnCopyCdc'); if (cp) cp.onclick = function () { copyText(L.filter(function (x) { return x.st === 'pend' && x.r.cdcOk; }).map(function (x) { return x.r.cdc; }).join('\n'), cp); };
   var dl = $('#btnTxtCdc'); if (dl) dl.onclick = function () { download(new Blob([L.filter(function (x) { return x.st === 'pend' && x.r.cdcOk; }).map(function (x) { return x.r.cdc; }).join('\r\n')], { type: 'text/plain' }), expName('cdc_pendientes', 'txt')); };
   ctl.querySelectorAll('[data-gman]').forEach(function (b) { b.onclick = function () { manGo(b.getAttribute('data-gman')); }; });
+  }
   $('#btnXlsx').disabled = !(cnt.ok + cnt.dif + cnt.tot + A.extra.length + cnt.pend + cnt.nocdc); $('#btnCsv').disabled = $('#btnXlsx').disabled; $('#btnKpi').disabled = $('#btnXlsx').disabled;
   renderCols(); renderSteps(cnt); renderExpMes(cnt); manSync();
 }
@@ -1224,7 +1254,7 @@ function detail(x) {
   if (x.diffs.length) h += '<b>Diferencias con ' + (de.manual && !r ? 'el total de la factura' : 'Marangatu') + '</b><ul class="diff">' + x.diffs.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>';
   if (de.manual) {
     h += '<div class="mono" style="margin:6px 0 10px">Factura manual · Timbrado ' + esc(de.timbrado) + ' · ' + esc(de.cond || '') + ' · ' + esc(de.moneda) + '</div>'
-      + '<div style="margin:0 0 10px;font-size:13px;color:var(--muted)">' + (de.lec ? 'Detalle leído de la foto por Claude' + (de.lec.ai < de.lec.n ? ' y corregido a mano' : '') + (de.lec.dud ? ' · <b>' + de.lec.dud + (de.lec.dud === 1 ? ' ítem dudoso sin confirmar' : ' ítems dudosos sin confirmar') + '</b>' : '') : 'Detalle cargado a mano') + (de.at ? ' el ' + esc(fdt(de.at)) : '') + ' · <button type="button" class="lnk" data-gman="' + esc(mk) + '">Abrir en Facturas manuales</button></div>';
+      + '<div style="margin:0 0 10px;font-size:13px;color:var(--muted)">' + (de.lec ? 'Detalle leído de la foto por la IA' + (de.lec.ai < de.lec.n ? ' y corregido a mano' : '') + (de.lec.dud ? ' · <b>' + de.lec.dud + (de.lec.dud === 1 ? ' ítem dudoso sin confirmar' : ' ítems dudosos sin confirmar') + '</b>' : '') : 'Detalle cargado a mano') + (de.at ? ' el ' + esc(fdt(de.at)) : '') + ' · <button type="button" class="lnk" data-gman="' + esc(mk) + '">Abrir en Facturas manuales</button></div>';
   } else {
     h += '<div class="mono" style="margin:6px 0 10px">CDC ' + esc(de.cdc) + ' · Timbrado ' + esc(de.timbrado) + ' · ' + esc(de.cond || '') + ' · ' + esc(de.moneda) + '</div>';
     if (de.at) h += '<div style="margin:0 0 10px;font-size:13px;color:var(--muted)">' + ICON.ok.replace('<svg ', '<svg width="14" height="14" style="vertical-align:-2px;margin-right:4px" ') + 'CDC ya buscada: XML descargado el ' + esc(fdt(de.at)) + '</div>';
@@ -1963,7 +1993,7 @@ function manEditorHtml(doc) {
     + '<input class="sr" type="file" id="manFile" multiple accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" tabindex="-1" aria-label="Elegir foto o PDF de la factura"></div></div>'
     + '<div class="mright"><h4 class="mh">Ítems de la factura</h4><div id="manLecNote">' + manLecNoteHtml(rec) + '</div><div id="manLines">' + ls.map(function (l, i) { return manLineHtml(l, i, ls.length); }).join('') + '</div>'
     + '<div class="row"><button class="btn sm" type="button" data-man="add">' + PLUS + 'Agregar ítem</button>' + (!manLines(rec).length && (+h.total) > 0 ? '<button class="btn sm" type="button" data-man="fill" title="Crea una línea por cada tasa de IVA con los importes de la factura">Una línea por tasa de IVA</button>' : '')
-    + (manAi(rec).ai ? '<button class="btn sm" type="button" data-man="lecdrop" title="Quita los ítems que leyó Claude; la foto se conserva">' + (manArm.lec ? 'Confirmar: descartar lo leído' : 'Descartar lo leído de la foto') + '</button>' : '') + '</div>'
+    + (manAi(rec).ai ? '<button class="btn sm" type="button" data-man="lecdrop" title="Quita los ítems que leyó la IA; la foto se conserva">' + (manArm.lec ? 'Confirmar: descartar lo leído' : 'Descartar lo leído de la foto') + '</button>' : '') + '</div>'
     + '<div class="mctl" id="manCtl">' + manCtlHtml(doc) + '</div>'
     + '<label class="mnote"><span>Observaciones (opcional)</span><textarea id="manNote" rows="2" maxlength="2000">' + esc(rec ? rec.note : '') + '</textarea></label>'
     + '<div class="row mfoot"><span class="msv" id="manSaved" role="status" aria-live="polite">' + (rec ? 'Guardado' : 'Sin cambios') + '</span><button class="btn sm" type="button" data-man="rmall"' + (rec ? '' : ' disabled') + '>' + (manArm.all ? 'Confirmar: quitar todo' : 'Quitar detalle y fotos') + '</button></div></div></div>'
@@ -1983,6 +2013,9 @@ function renderManual() {
   var seg = [['all', 'Todas'], ['pend', 'Por cargar'], ['dif', 'Con diferencia'], ['ok', 'Listas']].map(function (b) { return '<button type="button" data-man="flt" data-f="' + b[0] + '" aria-pressed="' + (S.manFilter === b[0]) + '">' + b[1] + '</button>'; }).join('');
   box.innerHTML = '<div id="manSum">' + manSummaryHtml(docs) + '</div><div id="manLec">' + manLecHtml() + '</div>'
     + '<div class="row man-bar">' + (s.n ? '<div class="seg" role="group" aria-label="Filtrar facturas manuales">' + seg + '</div>' : '') + '<button class="btn sm' + (s.n ? '' : ' primary') + '" type="button" data-man="new">' + PLUS + 'Agregar factura manual</button>' + (HOST ? '<button class="btn sm" type="button" data-man="dirall">Abrir carpeta Manuales</button>' : '') + '</div>'
+    + (HOST ? '<div class="iadrop" data-man="iafoto" role="button" tabindex="0" title="La IA local lee proveedor, RUC, número, fecha, total e ítems y registra la factura sola">'
+      + '<b>Subir fotos de facturas · la IA completa todo</b><span>Elegí o arrastrá acá las fotos o PDF. Solo completás lo que la factura no diga.</span>'
+      + '<input class="sr" type="file" id="iaFile" multiple accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.pdf" tabindex="-1" aria-label="Elegir fotos de facturas para la IA"></div>' : '')
     + '<div id="manHint">' + manHintHtml(docs) + '</div>'
     + '<div class="status" id="manStatus" role="status" aria-live="polite">' + esc(S.manMsg || '') + '</div>'
     + (S.manNew ? manFormHtml(null) : '') + (S.manEdit && cur && cur.orphan ? manFormHtml(cur) : '')
@@ -2242,6 +2275,83 @@ function lecApply(text, name, month) { // procesa un archivo de lecturas; devuel
   }
   return { ok: true, msg: p.join(' · ') || 'sin cambios', rows: shown };
 }
+/* =========================================================
+   Fotos para la IA local: la persona solo sube la foto; la IA (lector_local.py) lee TODO
+   (proveedor, RUC, número, timbrado, fecha, condición, total e ítems) y acá se registra:
+   si la factura está en el Excel de Marangatu se le agregan foto e ítems; si no, se crea como factura manual.
+   Lo que la factura no dice queda marcado para que la persona lo complete.
+   ========================================================= */
+function iaFecha(v) { var f = strOf(v, 20).trim().replace(/[.\-]/g, '/'), iso = fechaIso(f); return iso ? isoFecha(iso) : ''; }
+function iaPick(rows, h) { // fila de Marangatu sin CDC que corresponde a lo leído (RUC + número; si el RUC se leyó mal, número + total)
+  var n = h.numero, rb = rucBase(h.ruc), cands = rows.filter(function (r) { return normNum(r.numero) === n && n; });
+  return cands.filter(function (r) { return rb && rucBase(r.ruc) === rb; })[0]
+    || cands.filter(function (r) { return h.total && Math.abs((+r.total || 0) - h.total) <= 1; })[0] || null;
+}
+window.__iaFoto = function (text, b64, type, fname) { // lo llama el programa con lo que leyó la IA local y la foto
+  window.__ingChain = window.__ingChain.then(async function () {
+    var res = { cmd: 'iaFotoDone', name: fname, ok: false, msg: '' };
+    try {
+      var o = JSON.parse(text) || {}, rd = o.read && typeof o.read === 'object' ? o.read : {};
+      var nv = function (v) { var x = lecNum(v); return isFinite(x) && x !== 0 ? x : null; };
+      var h = { proveedor: strOf(rd.proveedor, 120).trim(), ruc: strOf(rd.ruc, 20).replace(/[^\d\-]/g, ''), numero: normNum(strOf(rd.numero, 30)),
+        timbrado: strOf(rd.timbrado, 14).replace(/\D/g, ''), fecha: iaFecha(rd.fecha), condicion: /cr[eé]d/i.test(String(rd.condicion || '')) ? 'CREDITO' : 'CONTADO',
+        tipo: 'FACTURA', total: nv(rd.total) || 0, iva10: nv(rd.iva10), iva5: nv(rd.iva5), exento: nv(rd.exento) };
+      if (!/^\d{3}-\d{3}-\d{7}$/.test(h.numero)) h.numero = '';
+      var fm = /^\d{2}\/(\d{2})\/(\d{4})$/.exec(h.fecha), mk = fm && S.months[fm[2] + '-' + fm[1]] ? fm[2] + '-' + fm[1] : S.cur;
+      if (!mk) { res.msg = 'primero cargá el Excel de Marangatu del mes'; return; }
+      var rows = (S.months[mk] && S.months[mk].rows) || [], row = iaPick(rows.filter(function (r) { return r.cdcEmpty; }), h);
+      var elec = !row && h.numero ? rows.filter(function (r) { return !r.cdcEmpty && normNum(r.numero) === h.numero && (!rucBase(h.ruc) || rucBase(r.ruc) === rucBase(h.ruc)); })[0] : null;
+      if (elec) { res.ok = true; res.msg = (elec.proveedor || 'factura') + ' ' + h.numero + ' es electrónica: su XML se busca en el paso 2 (no hace falta la foto)'; return; }
+      var head = row ? row : h, key = manKey(head), it = manItems(mk, true), t = Date.now(), nuevo = !it[key];
+      var rec = it[key] || { v: 1, key: key, src: row ? 'marangatu' : 'manual', month: mk, head: manHead(head), lines: [lnNew()], files: [], note: '', disk: null, at: t, made: t };
+      it[key] = rec;
+      // la foto
+      var bin = atob(b64 || ''), u = new Uint8Array(bin.length), i; for (i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+      var p = await manPrepare(new File([u], fname || 'foto.jpg', { type: type || 'image/jpeg' })), ids = [];
+      if (!rec.files.some(function (x) { return x.sha && x.sha === p.sha; })) {
+        var id = newId(), n = rec.files.reduce(function (m, x) { return Math.max(m, x.n); }, 0) + 1;
+        await manStoreBlob(id, p.blob, p.type);
+        rec.files.push({ id: id, n: n, ext: p.ext, type: p.type, name: strOf(String(fname || 'foto').replace(/[\\\/:*?"<>|]/g, '_'), 120), size: p.blob.size, w: p.w, h: p.h, rot: 0, at: t, sha: p.sha });
+        ids.push(id);
+      }
+      // los ítems (nunca se pisa lo que la persona cargó a mano)
+      var manual = rec.lines.some(function (l) { return !l.ai && (String(l.desc || '').trim() || +l.tot || +l.pu); });
+      var lines = []; (Array.isArray(o.lines) ? o.lines : []).slice(0, LEC.maxLines).forEach(function (x) { var l = lecLine(x); if (l) lines.push(l); });
+      if (!manual && lines.length) rec.lines = lines;
+      var falta = [];
+      if (!row) {
+        if (!h.proveedor) falta.push('proveedor'); if (!rucBase(h.ruc)) falta.push('RUC'); if (!h.numero) falta.push('número de factura');
+        if (!h.timbrado) falta.push('timbrado'); if (!h.fecha) falta.push('fecha'); if (!h.total) falta.push('total');
+      }
+      var ws = []; if (falta.length) ws.push('La factura no muestra (o no se pudo leer): ' + falta.join(', ') + '. Completalo con «Editar datos».');
+      if (!row && rows.length) ws.push('No figura en el Excel de Marangatu de ' + mesLabel(mk) + ': se creó como factura manual.');
+      if (fm && mk !== fm[2] + '-' + fm[1]) ws.push('La fecha es de otro mes que no está cargado; se guardó en ' + mesLabel(mk) + '.');
+      var sum = manTotals(rec.lines).total, tt = +(row ? row.total : h.total) || 0;
+      if (lines.length && tt && Math.abs(sum - tt) > TOL) ws.push('La suma de los ítems (' + fmt(sum) + ') no da el total (' + fmt(tt) + ').');
+      rec.lec = manLecClean({ by: 'IA local', at: t, h: lecHash(text), conf: o.conf, note: o.note, warn: ws, files: [fname] });
+      manDirty(rec, { newIds: ids, now: true });
+      if (mk === S.cur) { S.manSel = key; S.manView = { fid: ids[0] || '', zoom: 1 }; }
+      res.ok = true;
+      res.msg = (row ? 'Foto e ítems agregados a ' : (nuevo ? 'Factura nueva creada: ' : 'Actualizada: ')) + (head.proveedor || 'proveedor sin leer') + (h.numero ? ' ' + h.numero : '')
+        + ' · ' + lines.length + (lines.length === 1 ? ' ítem' : ' ítems') + (manual ? ' (tenía ítems a mano: no se tocaron)' : '') + (falta.length ? ' · falta: ' + falta.join(', ') : '');
+      S.manMsg = 'IA local: ' + res.msg + '.';
+      if (mk === S.cur) { renderManual(); render(); }
+    } catch (e) { res.msg = 'error al registrar: ' + e.message; }
+    finally { hostSend(res); }
+  });
+  return window.__ingChain;
+};
+async function iaSend(list) { // la persona elige o arrastra fotos: van a la IA local (el programa las deja en Biblioteca\_Entrada_IA)
+  var files = Array.prototype.slice.call(list || []), out = [], msgs = [];
+  for (var i = 0; i < files.length; i++) {
+    try { var p = await manPrepare(files[i]); out.push({ name: strOf(String(files[i].name || 'foto').replace(/[\\\/:*?"<>|]/g, '_'), 120), ext: p.ext, b64: b64(await p.blob.arrayBuffer()) }); }
+    catch (e) { msgs.push(e.message); }
+  }
+  for (var j = 0; j < out.length; j += 4) hostSend({ cmd: 'iaFotos', files: out.slice(j, j + 4) });
+  S.manMsg = (out.length ? (out.length === 1 ? 'Foto enviada' : out.length + ' fotos enviadas') + ' a la IA local: lee todos los datos y registra la factura sola (puede tardar unos minutos por foto). ' : '') + msgs.join(' ');
+  renderManual();
+}
+
 window.__ingestLecturas = function (text, name, month) { // lo llama el programa con el contenido de Manuales\lecturas*.json
   window.__ingChain = window.__ingChain.then(async function () {
     var r, nm = strOf(name, 100);
@@ -2264,13 +2374,13 @@ window.__hostLecturas = function (info) { // el programa avisa que un archivo de
 function lecPending(docs) { return docs.filter(function (d) { return d.rec && d.rec.files.length && !manLines(d.rec).length; }).length; }
 function manHintHtml(docs) { // fotos subidas que todavía no tienen ítems: esperan la lectura automática
   var n = HOST ? lecPending(docs) : 0; if (!n) return '';
-  return '<div class="note info mlec-hint">' + ICON.info + '<div><b>' + n + (n === 1 ? ' factura tiene foto y todavía no tiene ítems.' : ' facturas tienen foto y todavía no tienen ítems.') + '</b> Pedile a Claude «lee las facturas abiertas»: los ítems se cargan solos y se controlan contra Marangatu.</div></div>';
+  return '<div class="note info mlec-hint">' + ICON.info + '<div><b>' + n + (n === 1 ? ' factura tiene foto y todavía no tiene ítems.' : ' facturas tienen foto y todavía no tienen ítems.') + '</b> Subilas en «Subir fotos de facturas · la IA completa todo» o tocá «Leer fotos con IA» abajo: los ítems se cargan solos y se controlan contra Marangatu.</div></div>';
 }
 function manLecTags(d) {
   if (!d.rec || !d.rec.lec) return '';
   var a = manAi(d.rec), t = '';
-  if (a.ai) t += ' <span class="tag ai" title="Los ítems los leyó Claude de la foto">Leído por Claude</span>';
-  if (a.dud) t += ' <span class="tag dud" title="Claude no pudo leer estos ítems con seguridad: revisalos contra la foto">' + a.dud + (a.dud === 1 ? ' dudoso' : ' dudosos') + '</span>';
+  if (a.ai) t += ' <span class="tag ai" title="Los ítems los leyó la IA de la foto">Leído por IA</span>';
+  if (a.dud) t += ' <span class="tag dud" title="La IA no pudo leer estos ítems con seguridad: revisalos contra la foto">' + a.dud + (a.dud === 1 ? ' dudoso' : ' dudosos') + '</span>';
   return t;
 }
 function lnBadgeHtml(l, i) {
@@ -2289,7 +2399,7 @@ function manLecHtml() { // panel con el resultado de las últimas lecturas
   var R = S.lecRep; if (!R || (!R.rows.length && !R.err.length)) return '';
   var rows = R.rows, ok = rows.filter(function (r) { return r.res === 'ok'; }).length, no = rows.length - ok, present = {};
   manDocs().forEach(function (d) { present[d.key] = 1; });
-  var sum = (ok ? 'Claude leyó ' + ok + (ok === 1 ? ' factura' : ' facturas') + ' de las fotos y cargó sus ítems.' : 'No se cargó ninguna factura.') + (no ? ' ' + no + (no === 1 ? ' no se aplicó.' : ' no se aplicaron.') : '') + ' Revisá lo marcado.';
+  var sum = (ok ? 'La IA leyó ' + ok + (ok === 1 ? ' factura' : ' facturas') + ' de las fotos y cargó sus ítems.' : 'No se cargó ninguna factura.') + (no ? ' ' + no + (no === 1 ? ' no se aplicó.' : ' no se aplicaron.') : '') + ' Revisá lo marcado.';
   var h = '<section class="mlec" aria-labelledby="mlecT"><div class="mlec-h"><h4 id="mlecT">Lectura automática de fotos</h4><button type="button" class="btn sm" data-man="lecx">Entendido</button></div>'
     + '<p class="mut" role="status">' + esc(sum) + (R.at ? ' <span class="mono">' + esc(fdt(R.at)) + '</span>' : '') + '</p>';
   if (R.err.length) h += '<ul class="mlec-l">' + R.err.map(function (e) { return '<li class="rej">' + ICON.dif + '<span class="mlec-t"><b>Lectura sin usar.</b> ' + esc(e) + '</span></li>'; }).join('') + '</ul>';
@@ -2340,6 +2450,7 @@ function initManual() {
     else if (a === 'del') manDelLine(+t.getAttribute('data-i'));
     else if (a === 'fill') manFill();
     else if (a === 'upload') { var fi = $('#manFile'); if (fi) fi.click(); }
+    else if (a === 'iafoto') { if (e.target.id !== 'iaFile') { var fa = $('#iaFile'); if (fa) fa.click(); } }
     else if (a === 'view') { S.manView.fid = t.getAttribute('data-fid'); S.manView.zoom = 1; manPaintThumbs(); mvPaint(); }
     else if (a === 'rmf') {
       var fid = t.getAttribute('data-fid');
@@ -2353,6 +2464,9 @@ function initManual() {
     else if (a === 'dir') { var dd = manCur(); if (dd && dd.rec) hostSend({ cmd: 'openDir', month: S.cur, sub: 'Manuales' }); }
     else if (a === 'dirall') hostSend({ cmd: 'openDir', month: S.cur, sub: 'Manuales' });
   });
+  box.addEventListener('dragover', function (e) { var z = e.target.closest && e.target.closest('.iadrop'); if (z) { e.preventDefault(); z.classList.add('on'); } });
+  box.addEventListener('dragleave', function (e) { var z = e.target.closest && e.target.closest('.iadrop'); if (z) z.classList.remove('on'); });
+  box.addEventListener('drop', function (e) { var z = e.target.closest && e.target.closest('.iadrop'); if (!z || !e.dataTransfer) return; e.preventDefault(); e.stopPropagation(); z.classList.remove('on'); iaSend(e.dataTransfer.files); });
   box.addEventListener('submit', function (e) { var f = e.target.closest('#manForm'); if (!f) return; e.preventDefault(); manSubmitForm(f, !!S.manEdit); });
   box.addEventListener('input', function (e) {
     var t = e.target;
@@ -2367,6 +2481,7 @@ function initManual() {
   box.addEventListener('change', function (e) {
     var t = e.target, ln = t.closest && t.closest('.ln'), f = t.getAttribute && t.getAttribute('data-f');
     if (t.id === 'manFile') { var k = S.manSel; manAddFiles(k, t.files).then(function () { t.value = ''; }); return; }
+    if (t.id === 'iaFile') { iaSend(t.files).then(function () { t.value = ''; }); return; }
     if (!ln || !f) return; var doc = manCur(); if (!doc || !doc.rec) return; var rec = doc.rec, l = rec.lines[+ln.getAttribute('data-i')]; if (!l) return;
     if (f === 'desc') { // si ya se compró antes a este proveedor, se completan unidad, IVA y último precio
       var mem = manMemory(doc.head).filter(function (p) { return norm(p.desc) === norm(l.desc); })[0];
@@ -2410,6 +2525,17 @@ function initManual() {
 }
 
 /* ---------- inicio ---------- */
+(function () { // cuánto tarda cada dibujo de la pantalla
+  var wrap = function (name) { var f = window[name]; if (typeof f !== 'function') return; window[name] = function () { var t = performance.now(), r = f.apply(this, arguments); var d = performance.now() - t; if (d >= 30) perfNote(name, d); return r; }; };
+  ['render', 'renderManual', 'manSync', 'rebuildIdx', 'refreshLib', 'hostHello', 'manPaintThumbs', 'mvPaint', 'addChip', 'manDocs', 'renderMonths', 'renderList', 'renderTable', 'renderKpis'].forEach(wrap);
+})();
+window.bootDone = function (now) { // quita la pantalla de carga cuando la página ya está armada y dibujada
+  var b = document.getElementById('boot'); if (!b || b.__go) return; b.__go = 1;
+  var go = function () { if (b.parentNode) b.parentNode.removeChild(b); perfNote('pantalla visible', performance.now()); };
+  if (now) return go();
+  requestAnimationFrame(function () { requestAnimationFrame(function () { if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 900 }); else setTimeout(go, 80); }); });
+};
+var bootDone = window.bootDone;
 (async function init() {
   var drop = $('#drop'), inF = $('#inFiles'), inD = $('#inFolder');
   $('#btnFiles').onclick = function () { inF.click(); };
@@ -2440,17 +2566,20 @@ function initManual() {
   $('#btnXlsx').onclick = function () { doExport('xlsx'); };
   $('#btnKpi').onclick = doKpis;
   $('#btnCsv').onclick = function () { doExport('csv'); };
-  loadNodet();
-  applyLogo();
-  await dbOpen();
-  var saved = await dbAll(); saved.forEach(function (d) { S.de.set(d.cdc, d); });
-  await loadMonths();
-  await manLoad();
-  initManual();
+  var tp = performance.now(), fase = function (n) { var t = performance.now(); if (t - tp >= 20) perfNote('inicio: ' + n, t - tp); tp = t; };
+  perfNote('script cargado', tp);
+  loadNodet(); applyLogo(); fase('logo');
+  await dbOpen(); fase('abrir base');
+  var saved = await dbAll(); saved.forEach(function (d) { S.de.set(d.cdc, d); }); fase('leer XML guardados (' + saved.length + ')');
+  await loadMonths(); fase('leer meses');
+  await manLoad(); fase('leer manuales');
+  initManual(); fase('initManual');
+  perfNote('arranque listo', performance.now());
   Object.keys(S.months).sort().reverse().forEach(function (k) { var m = S.months[k]; addChip(mesLabel(k), m.rows.length + ' facturas · guardado' + (m.at ? ' el ' + new Date(m.at).toLocaleDateString('es-PY') : '')); });
   if (hasDir) { S.dir = await cfgGet('dir'); try { if (S.dir) { var pm = await S.dir.queryPermission({ mode: 'read' }); S.dirOk = pm === 'granted'; } } catch (e) { S.dir = null; } }
   await refreshLib(); render();
   hostHello();
+  bootDone();
   if (S.dir && S.dirOk) { try { await syncDir(S.dir); await refreshLib(); } catch (e) { setStatus('No se pudo leer la carpeta: ' + e.message, true); } }
   window.addEventListener('focus', function () { if (S.dir && S.dirOk && S.rows.length && !S.syncing) { S.syncing = true; syncDir(S.dir).then(refreshLib).catch(function () { }).then(function () { S.syncing = false; }); } });
   window.__kiah = { S: S, monthOfRows: monthOfRows, monthStats: monthStats, setCur: setCur, mesLabel: mesLabel, handleFiles: handleFiles, buildTables: buildTables, readXlsx: readXlsx, writeXlsx: writeXlsx, parseDEs: parseDEs, syncDir: syncDir, backupJson: backupJson, check: check, man: { docs: manDocs, key: manKey, de: manDe, totals: manTotals, recalc: manRecalc, lnNew: lnNew, prepare: manPrepare, addFiles: manAddFiles, select: manSelect, flush: manFlush, render: renderManual, find: manFind, rec: manRec, sanitize: manSanitize, memory: manMemory, normNum: normNum } };
