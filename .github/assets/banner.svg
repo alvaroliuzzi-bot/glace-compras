@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340" role="img" aria-label="Glacé Compras"><style>.float{animation:f 6s ease-in-out infinite}@keyframes f{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}.dash{animation:d 3s linear infinite}@keyframes d{to{stroke-dashoffset:-36}}.twinkle{animation:t 2.4s ease-in-out infinite}@keyframes t{0%,100%{opacity:1}50%{opacity:.35}}@media (prefers-reduced-motion:reduce){.float,.dash,.twinkle{animation:none}}</style>
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5E1239"/><stop offset=".6" stop-color="#B0336A"/><stop offset="1" stop-color="#F2A541"/></linearGradient>
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#140C10"/><stop offset=".55" stop-color="#2E1823"/><stop offset="1" stop-color="#8A2A5C"/></linearGradient>
 <clipPath id="r"><rect width="1280" height="340" rx="28"/></clipPath></defs>
 <g clip-path="url(#r)"><rect width="1280" height="340" fill="url(#g)"/>
 <circle cx="1180" cy="-40" r="220" fill="#fff" fill-opacity=".08"/><circle cx="760" cy="420" r="200" fill="#fff" fill-opacity=".07"/>
